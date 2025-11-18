@@ -16,14 +16,6 @@
 [![aircrack-ng](https://img.shields.io/badge/aircrack--ng-supported-blue.svg)](https://github.com/aircrack-ng/aircrack-ng)
 [![wifite2](https://img.shields.io/badge/wifite2-supported-blue.svg)](https://github.com/derv82/wifite2)
 
-## OpenHD dynamic power levels:
-To support changing the power index dynamically at run time we repurpose really small mBm values to override the power index at run time.
-This means if you set stupidly low mBm values (e.g. using iw dev), you now get full control over the power index at run time.
-WARN: This means the card can send with max power (power index 63) if you set NL80211_ATTR_WIPHY_TX_POWER_LEVEL=63(mbm). 
-However, this tx power stuff is completely busted in this driver already anyways, someone already changed the driver to cast dBm values
-directly to some power index. Tested, works.
-See https://github.com/OpenHD/rtl8812au/blob/v5.2.20/os_dep/linux/ioctl_cfg80211.c#L3667
-
 ### DKMS
 This driver can be installed using [DKMS]. This is a system which will automatically recompile and install a kernel module when a new kernel gets installed or updated. To make use of DKMS, install the `dkms` package, which on Debian (based) systems is done like this:
 ```
@@ -104,7 +96,7 @@ $ sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makef
   ```
   $ airmon-ng check kill
   ```
-  You may also uncheck the box "Automatically connect to this network when it is avaiable" in nm-connection-editor. This only works if you have a saved wifi connection.
+  You may also uncheck the box "Automatically connect to this network when it is available" in nm-connection-editor. This only works if you have a saved wifi connection.
   
   2. Set interface down
   ```
@@ -120,11 +112,11 @@ $ sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makef
   ```
   $ ip link set <wlan1> up
   ```
-For setting TX power
+For setting TX power to a fixed index (1=min, 63=max)
 ```
-$ iwconfig <wlan1> txpower 30
+$ iwconfig <wlan1> txpower -30
 or
-$ iw <wlan1> set txpower fixed 3000
+$ iw <wlan1> set txpower fixed -3000
 ```
 ### LED control
 

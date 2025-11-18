@@ -181,6 +181,7 @@ static struct usb_device_id rtw_usb_id_tbl[] = {
 	{USB_DEVICE(0x2357, 0x0101), .driver_info = RTL8812}, /* TP-Link - Archer T4U AC1200 */
 	{USB_DEVICE(0x2357, 0x0103), .driver_info = RTL8812}, /* TP-Link - T4UH */
 	{USB_DEVICE(0x2357, 0x010D), .driver_info = RTL8812}, /* TP-Link - Archer T4U AC1300 */
+	{USB_DEVICE(0x2357, 0x0115), .driver_info = RTL8812}, /* TP-Link - Archer T4U AC1300 */
 	{USB_DEVICE(0x2357, 0x010E), .driver_info = RTL8812}, /* TP-Link - Archer T4UH AC1300 */
 	{USB_DEVICE(0x2357, 0x010F), .driver_info = RTL8812}, /* TP-Link - T4UHP */
 	{USB_DEVICE(0x2357, 0x0122), .driver_info = RTL8812}, /* TP-Link - T4UHP (other) */
@@ -328,7 +329,7 @@ struct rtw_usb_drv usb_drv = {
 	.usbdrv.supports_autosuspend = 1,
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 19) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 19)) && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0))
 	.usbdrv.drvwrap.driver.shutdown = rtw_dev_shutdown,
 #else
 	.usbdrv.driver.shutdown = rtw_dev_shutdown,

@@ -345,7 +345,7 @@ static RT_CHANNEL_PLAN_MAP	RTW_ChannelPlanMap[] = {
 };
 
 static RT_CHANNEL_PLAN_MAP RTW_CHANNEL_PLAN_MAP_REALTEK_DEFINE =
-	CHPLAN_ENT(RTW_RD_2G_GLOBAL, RTW_RD_5G_FCC11, TXPWR_LMT_FCC);		/* 0x7F, Realtek Define -- *tweaked* */
+	CHPLAN_ENT(RTW_RD_2G_GLOBAL, RTW_RD_5G_FCC11, TXPWR_LMT_NONE);		/* 0x7F, Realtek Define -- *tweaked* */
 	/* Default is RTW_RD_2G_WORLD / RTW_RD_5G_FCC1, which has some channels disabled
 	  CHPLAN_ENT(RTW_RD_2G_WORLD,   RTW_RD_5G_FCC1,   TXPWR_LMT_FCC); */
 
@@ -3317,10 +3317,6 @@ unsigned int on_action_spct_ch_switch(_adapter *padapter, struct sta_info *psta,
 
 		RTW_INFO(FUNC_NDEV_FMT" from "MAC_FMT"\n",
 			FUNC_NDEV_ARG(padapter->pnetdev), MAC_ARG(psta->cmn.mac_addr));
-        if(true){
-            RTW_WARN(FUNC_NDEV_FMT" from "MAC_FMT"OpenHD channel debug\n",
-                    FUNC_NDEV_ARG(padapter->pnetdev), MAC_ARG(psta->cmn.mac_addr));
-        }
 
 		for_each_ie(ie, ies, ies_len) {
 			if (ie->id == WLAN_EID_CHANNEL_SWITCH) {
@@ -7170,14 +7166,12 @@ struct xmit_frame *_alloc_mgtxmitframe(struct xmit_priv *pxmitpriv, bool once)
 
 	if (pmgntframe == NULL) {
 		RTW_INFO(FUNC_ADPT_FMT" alloc xmitframe fail, once:%d\n", FUNC_ADPT_ARG(pxmitpriv->adapter), once);
-        //RTW_WARN("OpenHD rtw_alloc_xmitframe fail, once:%d\n", once);
 		goto exit;
 	}
 
 	pxmitbuf = rtw_alloc_xmitbuf_ext(pxmitpriv);
 	if (pxmitbuf == NULL) {
 		RTW_INFO(FUNC_ADPT_FMT" alloc xmitbuf fail\n", FUNC_ADPT_ARG(pxmitpriv->adapter));
-        //RTW_WARN("OpenHD  rtw_alloc_xmitbuf_ext fail\n");
 		rtw_free_xmitframe(pxmitpriv, pmgntframe);
 		pmgntframe = NULL;
 		goto exit;
@@ -7348,15 +7342,15 @@ void update_mgntframe_attrib_addr(_adapter *padapter, struct xmit_frame *pmgntfr
 #endif /* CONFIG_BEAMFORMING */
 }
 
-void dump_mgntframe(_adapter *padapter, struct xmit_frame *pmgntframe)
+s32 dump_mgntframe(_adapter *padapter, struct xmit_frame *pmgntframe)
 {
 	if (RTW_CANNOT_RUN(padapter)) {
 		rtw_free_xmitbuf(&padapter->xmitpriv, pmgntframe->pxmitbuf);
 		rtw_free_xmitframe(&padapter->xmitpriv, pmgntframe);
-		return;
+		return _FAIL;
 	}
 
-	rtw_hal_mgnt_xmit(padapter, pmgntframe);
+	return rtw_hal_mgnt_xmit(padapter, pmgntframe);
 }
 
 s32 dump_mgntframe_and_wait(_adapter *padapter, struct xmit_frame *pmgntframe, int timeout_ms)

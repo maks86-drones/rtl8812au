@@ -24,6 +24,10 @@
 #endif
 
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0))
+#define strlcpy strscpy
+#endif
+
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Realtek Wireless Lan Driver");
 MODULE_AUTHOR("Realtek Semiconductor Corp.");
@@ -588,19 +592,6 @@ int rtw_tx_pwr_by_rate = CONFIG_TXPWR_BY_RATE_EN;
 module_param(rtw_tx_pwr_by_rate, int, 0644);
 MODULE_PARM_DESC(rtw_tx_pwr_by_rate, "0:Disable, 1:Enable, 2: Depend on efuse");
 
-// OpenHD params
-int openhd_override_channel = 0;
-module_param(openhd_override_channel, int, 0644);
-MODULE_PARM_DESC(openhd_override_channel, "OpenHD easy (CRDA workaround)");
-int openhd_override_channel_width = 0;
-module_param(openhd_override_channel_width, int, 0644);
-MODULE_PARM_DESC(openhd_override_channel_width, "OpenHD easy (CRDA workaround)");
-int openhd_override_tx_power_index = 0;
-module_param(openhd_override_tx_power_index, int, 0644);
-MODULE_PARM_DESC(openhd_override_tx_power_index, "OpenHD easy (CRDA workaround)");
-//
-
-
 #ifdef CONFIG_TXPWR_LIMIT
 int rtw_tx_pwr_lmt_enable = CONFIG_TXPWR_LIMIT_EN;
 module_param(rtw_tx_pwr_lmt_enable, int, 0644);
@@ -1010,27 +1001,8 @@ uint loadparam(_adapter *padapter)
 
 #ifdef CONFIG_TXPWR_LIMIT
 	registry_par->RegEnableTxPowerLimit = (u8)rtw_tx_pwr_lmt_enable;
-	//Consti10: Define is off at build time
-	RTW_INFO("OpenHD:rtw_tx_pwr_lmt_enable:%d\n",(int)rtw_tx_pwr_lmt_enable);
 #endif
-	// TODO fix me
-	RTW_INFO("OpenHD:hard-coded params !!");
-	//rtw_tx_pwr_idx_override=58;
-  	rtw_tx_pwr_by_rate=0;
-
 	registry_par->RegEnableTxPowerByRate = (u8)rtw_tx_pwr_by_rate;
-    RTW_INFO("OpenHD:rtw_tx_pwr_by_rate:%d\n",(int)rtw_tx_pwr_by_rate);
-
-	if (rtw_tx_pwr_idx_override > MAX_POWER_INDEX)
-		rtw_tx_pwr_idx_override = MAX_POWER_INDEX;
-	registry_par->RegTxPowerIndexOverride = (u8)rtw_tx_pwr_idx_override;
-	RTW_INFO("OpenHD:rtw_tx_pwr_idx_override:%d\n",(int)rtw_tx_pwr_idx_override);
-
-    registry_par->openhd_override_channel = openhd_override_channel;
-    registry_par->openhd_override_channel_width = openhd_override_channel_width;
-    RTW_WARN("OpenHD: openhd_override_channel %d, openhd_override_channel_width: %d",
-             registry_par->openhd_override_channel,registry_par->openhd_override_channel_width);
-
 
 	rtw_regsty_load_target_tx_power(registry_par);
 
@@ -1190,11 +1162,7 @@ static int rtw_net_set_mac_address(struct net_device *pnetdev, void *addr)
 	}
 
 	_rtw_memcpy(adapter_mac_addr(padapter), sa->sa_data, ETH_ALEN); /* set mac addr to adapter */
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(5, 17, 0))
-	eth_hw_addr_set(pnetdev, sa->sa_data); /* set mac addr to net_device */
-#else
-	_rtw_memcpy(pnetdev->dev_addr, sa->sa_data, ETH_ALEN); /* set mac addr to net_device */
-#endif
+	dev_addr_set(pnetdev, sa->sa_data); /* set mac addr to net_device */
 
 #if 0
 	if (rtw_is_hw_init_completed(padapter)) {
@@ -1619,11 +1587,8 @@ int rtw_os_ndev_register(_adapter *adapter, const char *name)
 
 	/* alloc netdev name */
 	rtw_init_netdev_name(ndev, name);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(5, 17, 0))
-	eth_hw_addr_set(ndev, adapter_mac_addr(adapter)); /* set mac addr to net_device */
-#else
-	_rtw_memcpy(ndev->dev_addr, adapter_mac_addr(adapter), ETH_ALEN);
-#endif
+
+	dev_addr_set(ndev, adapter_mac_addr(adapter));
 #if defined(CONFIG_NET_NS)
 	dev_net_set(ndev, wiphy_net(adapter_to_wiphy(adapter)));
 #endif //defined(CONFIG_NET_NS)
@@ -2539,11 +2504,7 @@ int _netdev_vir_if_open(struct net_device *pnetdev)
 		rtw_mbid_camid_alloc(padapter, adapter_mac_addr(padapter));
 #endif
 		rtw_init_wifidirect_addrs(padapter, adapter_mac_addr(padapter), adapter_mac_addr(padapter));
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(5, 17, 0))
-		eth_hw_addr_set(pnetdev, adapter_mac_addr(padapter));
-#else
-		_rtw_memcpy(pnetdev->dev_addr, adapter_mac_addr(padapter), ETH_ALEN);
-#endif
+		dev_addr_set(pnetdev, adapter_mac_addr(padapter));
 	}
 #endif /*CONFIG_PLATFORM_INTEL_BYT*/
 
@@ -2638,7 +2599,6 @@ static int netdev_vir_if_close(struct net_device *pnetdev)
 #endif
 
 #ifdef CONFIG_IOCTL_CFG80211
-    struct wireless_dev *wdev = padapter->rtw_wdev;
 	wdev->iftype = NL80211_IFTYPE_MONITOR;
 	wdev->current_bss = NULL;
 	rtw_scan_abort(padapter);
@@ -3181,11 +3141,7 @@ int _netdev_open(struct net_device *pnetdev)
 		rtw_mbid_camid_alloc(padapter, adapter_mac_addr(padapter));
 #endif
 		rtw_init_wifidirect_addrs(padapter, adapter_mac_addr(padapter), adapter_mac_addr(padapter));
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(5, 17, 0))
-		eth_hw_addr_set(pnetdev, adapter_mac_addr(padapter));
-#else
-		_rtw_memcpy(pnetdev->dev_addr, adapter_mac_addr(padapter), ETH_ALEN);
-#endif
+		dev_addr_set(pnetdev, adapter_mac_addr(padapter));
 #endif /* CONFIG_PLATFORM_INTEL_BYT */
 
 		rtw_clr_surprise_removed(padapter);
@@ -4868,13 +4824,3 @@ int rtw_vendor_ie_set_api(struct net_device *dev, char *extra)
 EXPORT_SYMBOL(rtw_vendor_ie_set_api);
 
 #endif
-
-int get_openhd_override_channel(void){
-    return openhd_override_channel;
-}
-int get_openhd_override_channel_width(void){
-    return openhd_override_channel_width;
-}
-int get_openhd_override_tx_power_index(void){
-    return openhd_override_tx_power_index;
-}

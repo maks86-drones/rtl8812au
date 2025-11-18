@@ -587,8 +587,7 @@ PHY_GetTxPowerIndex_8812A(
 	by_rate_diff = by_rate_diff > limit ? limit : by_rate_diff;
 	power_idx = base_idx + by_rate_diff + tpt_offset + extra_bias;
 
-	if (pAdapter->registrypriv.RegTxPowerIndexOverride)
-		power_idx = pAdapter->registrypriv.RegTxPowerIndexOverride;
+	power_idx = get_overridden_tx_power_index(power_idx);
 
 	if (power_idx > MAX_POWER_INDEX)
 		power_idx = MAX_POWER_INDEX;
@@ -616,12 +615,7 @@ PHY_SetTxPowerIndex_8812A(
 {
 	HAL_DATA_TYPE		*pHalData	= GET_HAL_DATA(Adapter);
 
-	//OpenHD Consti10: If you start at set_tx_power_level_handler and then go through all the
-	// different functions that do cryptic things in the end you land here
-  	//RTW_INFO("OpenHD:PHY_SetTxPowerIndex_8812A with PowerIndex:%d Override:%d Rate:%d ",PowerIndex,Adapter->registrypriv.RegTxPowerIndexOverride,(int)Rate);
-
-	if (Adapter->registrypriv.RegTxPowerIndexOverride)
-		PowerIndex = (u32)Adapter->registrypriv.RegTxPowerIndexOverride;
+	PowerIndex = (u32)get_overridden_tx_power_index((u8)PowerIndex);
 
 	/* <20120928, Kordan> A workaround in 8812A/8821A testchip, to fix the bug of odd Tx power indexes. */
 	if ((PowerIndex % 2 == 1) && IS_HARDWARE_TYPE_JAGUAR(Adapter) && IS_TEST_CHIP(pHalData->version_id))
@@ -1929,9 +1923,6 @@ PHY_HandleSwChnlAndSetBW8812(
 		RTW_INFO("PHY_HandleSwChnlAndSetBW8812:  not switch channel and not set bandwidth\n");
 		return;
 	}
-    if(true){
-        RTW_WARN("OpenHD channel debug: PHY_HandleSwChnlAndSetBW8812: bSwitchChannel %d, bSetBandWidth %d ChannelNum:%d\n",bSwitchChannel,bSetBandWidth,(int)ChannelNum);
-    }
 
 	/* skip change for channel or bandwidth is the same */
 	if (bSwitchChannel) {
@@ -2011,9 +2002,7 @@ PHY_HandleSwChnlAndSetBW8812(
 	/* RTW_INFO("CenterFrequencyIndex1 %d\n",pHalData->CurrentCenterFrequencyIndex1); */
 
 	/* RTW_INFO("<= PHY_HandleSwChnlAndSetBW8812: bSwChnl %d, bSetChnlBW %d\n",pHalData->bSwChnl,pHalData->bSetChnlBW); */
-    if(true){
-        RTW_WARN("OpenHD channel debug Channel %d ChannelBW %d ",pHalData->current_channel, pHalData->current_channel_bw);
-    }
+
 }
 
 VOID

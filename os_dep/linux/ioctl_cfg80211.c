@@ -402,15 +402,13 @@ u8 rtw_cfg80211_ch_switch_notify(_adapter *adapter, u8 ch, u8 bw, u8 offset, u8 
 	u8 ret = _SUCCESS;
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
-	struct cfg80211_chan_def chdef;
+	struct cfg80211_chan_def chdef = {};
 
 	ret = rtw_chbw_to_cfg80211_chan_def(wiphy, &chdef, ch, bw, offset, ht);
 	if (ret != _SUCCESS)
 		goto exit;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0))
-	cfg80211_ch_switch_notify(adapter->pnetdev, &chdef, 0);
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0))
 	cfg80211_ch_switch_notify(adapter->pnetdev, &chdef, 0, 0);
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 2))
 	cfg80211_ch_switch_notify(adapter->pnetdev, &chdef, 0);
@@ -1787,16 +1785,17 @@ addkey_end:
 
 }
 
-static int cfg80211_rtw_get_key(struct wiphy *wiphy, struct net_device *ndev
+static int cfg80211_rtw_get_key(struct wiphy *wiphy, struct net_device *ndev,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
-	, int link_id
+        int link_id,
 #endif
-	, u8 keyid
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)) || defined(COMPAT_KERNEL_RELEASE)
-	, bool pairwise
-#endif
-	, const u8 *mac_addr, void *cookie
-	, void (*callback)(void *cookie, struct key_params *))
+#if (CFG80211_API_LEVEL >= KERNEL_VERSION(2, 6, 37)) || defined(COMPAT_KERNEL_RELEASE)
+	u8 key_index, bool pairwise, const u8 *mac_addr,
+#else	/* (CFG80211_API_LEVEL >= KERNEL_VERSION(2, 6, 37)) */
+	u8 key_index, const u8 *mac_addr,
+#endif /* (CFG80211_API_LEVEL >= KERNEL_VERSION(2, 6, 37)) */
+	void *cookie,
+	void (*callback)(void *cookie, struct key_params *))
 {
 #if 0
 	struct iwm_priv *iwm = ndev_to_iwm(ndev);
@@ -3676,36 +3675,18 @@ int value;
 #else
 	value = dbm;
 #endif
-	RTW_INFO("OpenHD:cfg80211_rtw_set_txpower with %d mBm %d (?dBm?)",(int)mbm,(int)value);
-if(value < 0)
-	value = 0;
+
 if(value > 40)
 	value = 40;
 
 if(type == NL80211_TX_POWER_FIXED) {
-	RTW_INFO("OpenHD:cfg80211_rtw_set_txpower NL80211_TX_POWER_FIXED");
-	// OpenHD dynamic tx power: We hack the driver here by repurposing really small dBm values
-	// as power index. This is a bit dangerous - since 63mBm now suddenly becomes max power.
-	// But since 25mW is already ~14dBm (and therefore 140 mBm if you go with the 100 factor)
-	// i think it is safe to assume that only OpenHD (which knows about the driver) ever calls
-	// the "set tx power fixed" with those ultra low values. The nice thing then is that we don't even
-	// need any kernel patches to set the card to an arbitratry high power value, since they are well below the legal limit of
-	// every country. Note, however, that the card is now not doing what linux tells it - but honestly, someone decided
-	// to just map dBm values to some power index at some point anyways.
-    // 22.April: Simplify -> use tpi override value (and dummy tx power commits)
-    /*int openhd_override_tx_power_index=get_openhd_override_tx_power_index();
-    if(openhd_override_tx_power_index>=0 && openhd_override_tx_power_index<=63){
-        padapter->registrypriv.RegTxPowerIndexOverride = openhd_override_tx_power_index;
-    }else{
-        padapter->registrypriv.RegTxPowerIndexOverride = 0;
-    }*/
-    if(mbm>=0 && mbm<=63){
-	  padapter->registrypriv.RegTxPowerIndexOverride = mbm;
-	  RTW_WARN("OpenHD:interpreting %d mBm as tx power index override",(int)mbm);
+	if (value < 0) {
+		// the driver will read and bound this value if it's over-range
+		rtw_tx_pwr_idx_override = -value;
+	} else {
+		rtw_tx_pwr_idx_override = 0;
+		pHalData->CurrentTxPwrIdx = value;
 	}
-	RTW_INFO("OpenHD:Tx power index override is %d",padapter->registrypriv.RegTxPowerIndexOverride);
-
-	pHalData->CurrentTxPwrIdx = value;
 	rtw_hal_set_tx_power_level(padapter, pHalData->current_channel);
 } else
 	return -EOPNOTSUPP;
@@ -3746,16 +3727,19 @@ static int cfg80211_rtw_get_txpower(struct wiphy *wiphy,
 #endif
 	int *dbm)
 {
+	u8 override;
 	_adapter *padapter = wiphy_to_adapter(wiphy);
 	HAL_DATA_TYPE *pHalData = GET_HAL_DATA(padapter);
 
 	RTW_INFO("%s\n", __func__);
-	if(padapter->registrypriv.RegTxPowerIndexOverride){
-	  	*dbm = padapter->registrypriv.RegTxPowerIndexOverride;
-	}else{
-	  	// *dbm = (12);
+
+	// *dbm = (12);
+	override = get_overridden_tx_power_index(0);
+	if (override)
+		*dbm = -(int)override;
+	else
 		*dbm = pHalData->CurrentTxPwrIdx;
-	}
+
 	return 0;
 }
 
@@ -4953,6 +4937,7 @@ static int cfg80211_rtw_get_channel(struct wiphy *wiphy, struct wireless_dev *wd
       //RTW_INFO("%s dvobj null\n", __func__);
     }
     switch(pHalData->current_channel_bw){
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0))
       case CHANNEL_WIDTH_5:
 	//RTW_INFO("%s width 5\n", __func__);
 	width = NL80211_CHAN_WIDTH_5;
@@ -4963,6 +4948,7 @@ static int cfg80211_rtw_get_channel(struct wiphy *wiphy, struct wireless_dev *wd
 	width = NL80211_CHAN_WIDTH_10;
 	center_freq = control_freq;
 	break;
+#endif
       case CHANNEL_WIDTH_20:
 	//RTW_INFO("%s width 20\n", __func__);
 	width = NL80211_CHAN_WIDTH_20;
@@ -5072,15 +5058,12 @@ static int	cfg80211_rtw_set_channel(struct wiphy *wiphy
 
 	RTW_INFO(FUNC_ADPT_FMT" ch:%d bw:%d, offset:%d\n"
 		, FUNC_ADPT_ARG(padapter), chan_target, chan_width, chan_offset);
-	if(true){
-	  RTW_WARN(FUNC_ADPT_FMT" ch:%d bw:%d, offset:%d OpenHD channel debug\n"
-		, FUNC_ADPT_ARG(padapter), chan_target, chan_width, chan_offset);
-	}
+
 	rtw_set_chbw_cmd(padapter, chan_target, chan_width, chan_offset, RTW_CMDF_WAIT_ACK);
 
 	return 0;
 }
-// Consti10: In monitor mode, this method is used the set the channel freq, at least on ubuntu 5.19.X
+
 static int cfg80211_rtw_set_monitor_channel(struct wiphy *wiphy
 #if (CFG80211_API_LEVEL >= KERNEL_VERSION(3, 8, 0))
 	, struct cfg80211_chan_def *chandef
@@ -5174,27 +5157,7 @@ static int cfg80211_rtw_set_monitor_channel(struct wiphy *wiphy
 #endif
 	RTW_INFO(FUNC_ADPT_FMT" ch:%d bw:%d, offset:%d\n"
 		, FUNC_ADPT_ARG(padapter), target_channal, target_width, target_offset);
-    // OpenHD channel via module param
-    // update if module param has been updated
-    padapter->registrypriv.openhd_override_channel=get_openhd_override_channel();
-    padapter->registrypriv.openhd_override_channel_width=get_openhd_override_channel_width();
 
-    RTW_WARN("OpenHD: override %d %d",padapter->registrypriv.openhd_override_channel,padapter->registrypriv.openhd_override_channel_width);
-    {
-        if(padapter->registrypriv.openhd_override_channel){
-            target_channal=padapter->registrypriv.openhd_override_channel;
-            RTW_WARN("OpenHD: using openhd_override_channel");
-        }
-        if(padapter->registrypriv.openhd_override_channel_width){
-            target_width=padapter->registrypriv.openhd_override_channel_width;
-            RTW_WARN("OpenHD: using openhd_override_channel_width");
-        }
-    }
-
-	if(true){
-	  RTW_WARN(FUNC_ADPT_FMT" ch:%d bw:%d, offset:%d OpenHD channel debug\n"
-		, FUNC_ADPT_ARG(padapter), target_channal, target_width, target_offset);
-	}
 	rtw_set_chbw_cmd(padapter, target_channal, target_width, target_offset, RTW_CMDF_WAIT_ACK);
 
 	return 0;

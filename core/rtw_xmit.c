@@ -26,9 +26,6 @@
 static u8 P802_1H_OUI[P80211_OUI_LEN] = { 0x00, 0x00, 0xf8 };
 static u8 RFC1042_OUI[P80211_OUI_LEN] = { 0x00, 0x00, 0x00 };
 
-static int openhd_alloc_mgtxmitframe_error_count=0;
-static int openhd_monitor_alloc_mgtxmitframe_error_count=0;
-
 static void _init_txservq(struct tx_servq *ptxservq)
 {
 	_rtw_init_listhead(&ptxservq->tx_pending);
@@ -3106,10 +3103,9 @@ struct xmit_buf *rtw_alloc_xmitbuf_ext(struct xmit_priv *pxmitpriv)
 
 	_enter_critical(&pfree_queue->lock, &irqL);
 
-	if (_rtw_queue_empty(pfree_queue) == _TRUE) {
-        pxmitbuf = NULL;
-        //RTW_WARN("OpenHD alloc rtw_alloc_xmitbuf_ext fail NR_XMIT_EXTBUFF:%d MAX_XMIT_EXTBUF_SZ:%d\n",NR_XMIT_EXTBUFF,MAX_XMIT_EXTBUF_SZ);
-    }else {
+	if (_rtw_queue_empty(pfree_queue) == _TRUE)
+		pxmitbuf = NULL;
+	else {
 
 		phead = get_list_head(pfree_queue);
 
@@ -3125,6 +3121,7 @@ struct xmit_buf *rtw_alloc_xmitbuf_ext(struct xmit_priv *pxmitpriv)
 #ifdef DBG_XMIT_BUF_EXT
 		RTW_INFO("DBG_XMIT_BUF_EXT ALLOC no=%d,  free_xmit_extbuf_cnt=%d\n", pxmitbuf->no, pxmitpriv->free_xmit_extbuf_cnt);
 #endif
+
 
 		pxmitbuf->priv_data = NULL;
 
@@ -3375,11 +3372,11 @@ struct xmit_frame *rtw_alloc_xmitframe_ext(struct xmit_priv *pxmitpriv)
 	_list *plist, *phead;
 	_queue *queue = &pxmitpriv->free_xframe_ext_queue;
 
+
 	_enter_critical_bh(&queue->lock, &irqL);
 
 	if (_rtw_queue_empty(queue) == _TRUE) {
 		pxframe =  NULL;
-        //RTW_WARN("OpenHD alloc rtw_alloc_xmitframe_ext failed ");
 	} else {
 		phead = get_list_head(queue);
 		plist = get_next(phead);
@@ -3816,7 +3813,6 @@ __inline static struct tx_servq *rtw_get_sta_pending
  */
 s32 rtw_xmit_classifier(_adapter *padapter, struct xmit_frame *pxmitframe)
 {
-    // OpenHD: I think here we pull out the first queue and actually transmit
 	/* _irqL irqL0; */
 	u8	ac_index;
 	struct sta_info	*psta;
@@ -4231,29 +4227,16 @@ static struct xmit_frame* monitor_alloc_mgtxmitframe(struct xmit_priv *pxmitpriv
 	int delay = 300;
 	struct xmit_frame *pmgntframe = NULL;
 
-    // OpenHD: Here a method that returns a frame if place is in the queue
-    // Is called 4 times with a (increasing) sleep until there is space in the queue
-    // If no space is in the queue after 4 calls, NULL is returned
-    // The method alloc_mgtxmitframe just calls
-    // _alloc_mgtxmitframe(pxmitpriv, _FALSE); (once=false)
-    // wich then calls rtw_alloc_xmitframe_ext
-    // and rtw_alloc_xmitbuf_ext (Frame and buffer)
-    // If one of these 2 fails, it returns NULL
-    // rtw_alloc_xmitframe_ext uses the free_xframe_ext_queue
-    // rtw_alloc_xmitbuf_ext uses the free_xmit_extbuf_queue
-     // On tx errors, rtw_alloc_xmitbuf_ext seems to be the one that fails all the time
-    // with size(s) NR_XMIT_EXTBUFF:64 MAX_XMIT_EXTBUF_SZ:1536 (default in driver as original)
-	for(tries = 3; tries >= 0; tries--) {
+	for(tries = 0; tries < 4; tries++) {
+		if(unlikely(tries > 0))
+		{
+			rtw_udelay_os(delay);
+			delay += delay/2;
+		}
 		pmgntframe = alloc_mgtxmitframe(pxmitpriv);
-		if(pmgntframe != NULL)
-			return pmgntframe;
-        openhd_alloc_mgtxmitframe_error_count++;
-        //RTW_WARN("OpenHD: alloc_mgtxmitframe failed, retries:%d, total error count %d:%d",
-        //         tries,openhd_alloc_mgtxmitframe_error_count,openhd_monitor_alloc_mgtxmitframe_error_count);
-		rtw_udelay_os(delay);
-		delay += delay/2;
+		if(pmgntframe != NULL) break;
 	}
-	return NULL;
+	return pmgntframe;
 }
 
 s32 rtw_monitor_xmit_entry(struct sk_buff *skb, struct net_device *ndev)
@@ -4284,12 +4267,11 @@ s32 rtw_monitor_xmit_entry(struct sk_buff *skb, struct net_device *ndev)
 	u32 len = skb->len;
 	u8 category, action;
 	int type = -1;
-    // OpenHD debug
-    u64 before_allocate;
-    u64 delta_allocate;
 
-	if (skb)
-		rtw_mstat_update(MSTAT_TYPE_SKB, MSTAT_ALLOC_SUCCESS, skb->truesize);
+	if (unlikely(!skb))
+		goto fail;
+
+	rtw_mstat_update(MSTAT_TYPE_SKB, MSTAT_ALLOC_SUCCESS, skb->truesize);
 
 	if (unlikely(skb->len < sizeof(struct ieee80211_radiotap_header)))
 		goto fail;
@@ -4302,16 +4284,12 @@ s32 rtw_monitor_xmit_entry(struct sk_buff *skb, struct net_device *ndev)
 	if (unlikely(skb->len < rtap_len))
 		goto fail;
 
-    //RTW_WARN("OpenHD: calling monitor_alloc_mgtxmitframe X");
-    before_allocate=ktime_get_ns();
-	if ((pmgntframe = monitor_alloc_mgtxmitframe(pxmitpriv)) == NULL) {
+	pmgntframe = monitor_alloc_mgtxmitframe(pxmitpriv);
+	if (unlikely(pmgntframe == NULL)) {
 		DBG_COUNTER(padapter->tx_logs.core_tx_err_pxmitframe);
-        openhd_monitor_alloc_mgtxmitframe_error_count++;
-        delta_allocate=ktime_get_ns()-before_allocate;
-        RTW_WARN("OpenHD: monitor_alloc_mgtxmitframe - (%dus) tx busy %d",
-                 ((int)delta_allocate/1000),
-                 openhd_monitor_alloc_mgtxmitframe_error_count);
-		return NETDEV_TX_BUSY;
+		pxmitpriv->tx_drop++;
+		rtw_skb_free(skb);
+		return NETDEV_TX_OK;
 	}
 
 	ret = rtw_ieee80211_radiotap_iterator_init(&iterator, rtap_hdr, skb->len, NULL);
@@ -4422,7 +4400,12 @@ s32 rtw_monitor_xmit_entry(struct sk_buff *skb, struct net_device *ndev)
 	pmlmeext->mgnt_seq++;
 
 	pattrib->last_txcmdsz = pattrib->pktlen;
-	dump_mgntframe(padapter, pmgntframe);
+	ret = dump_mgntframe(padapter, pmgntframe);
+	if (unlikely(ret != _SUCCESS))
+	{
+		pxmitpriv->tx_drop++;
+		goto fail;
+	}
 	DBG_COUNTER(padapter->tx_logs.core_tx);
 	pxmitpriv->tx_pkts++;
 	pxmitpriv->tx_bytes += skb->len;

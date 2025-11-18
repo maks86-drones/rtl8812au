@@ -1,15 +1,22 @@
-VERSION_HEADER = include/rtw_version.h
+src ?= $(shell pwd)
 EXTRA_CFLAGS += $(USER_EXTRA_CFLAGS) -fno-pie
-EXTRA_CFLAGS += -O1
-#EXTRA_CFLAGS += -O3
-EXTRA_CFLAGS += -Wall -Wno-error
-EXTRA_CFLAGS += -Wextra
-EXTRA_CFLAGS += -Wno-address
+EXTRA_CFLAGS += -O3
+EXTRA_CFLAGS += -Wno-unused-variable
+#EXTRA_CFLAGS += -Wno-unused-value
+EXTRA_CFLAGS += -Wno-unused-label
+#EXTRA_CFLAGS += -Wno-unused-parameter
+EXTRA_CFLAGS += -Wno-unused-function
+EXTRA_CFLAGS += -Wno-implicit-fallthrough
+EXTRA_CFLAGS += -Wno-cast-function-type
+#EXTRA_CFLAGS += -Wno-error=cast-function-type
+#EXTRA_CFLAGS += -Wno-parentheses-equality
+EXTRA_CFLAGS += -Wno-error=incompatible-pointer-types
 EXTRA_CFLAGS += -Wno-stringop-overread
-
-#EXTRA_CFLAGS += -Werror
-#EXTRA_CFLAGS += -pedantic
-#EXTRA_CFLAGS += -Wshadow -Wpointer-arith -Wcast-qual -Wstrict-prototypes -Wmissing-prototypes
+#EXTRA_CFLAGS += -Wno-pointer-bool-conversion
+EXTRA_CFLAGS += -Wno-unknown-pragmas
+#EXTRA_CFLAGS += -Wno-unused
+EXTRA_CFLAGS += -Wno-address
+EXTRA_CFLAGS += -Wno-vla -g
 
 #EXTRA_CFLAGS += -Wno-tautological-compare
 #EXTRA_CFLAGS += -Wno-incompatible-pointer-types
@@ -23,19 +30,12 @@ EXTRA_CFLAGS += -Wno-unused-function
 EXTRA_CFLAGS += -Wno-unused
 EXTRA_CFLAGS += -Wno-cast-function-type
 EXTRA_CFLAGS += -Wno-date-time
-EXTRA_CFLAGS += -Wno-misleading-indentation
+#EXTRA_CFLAGS += -Wno-misleading-indentation
 EXTRA_CFLAGS += -Wno-uninitialized
-
-####EXTRA_CFLAGS += -DCONFIG_CONCURRENT_MODE
-EXTRA_CFLAGS += -DCONFIG_USB_TX_AGGREGATION
-CFLAGS += -Wno-declaration-after-statement
 # Relax some warnings from '-Wextra' so we won't get flooded with warnings
 EXTRA_CFLAGS += -Wno-sign-compare
 #EXTRA_CFLAGS += -Wno-missing-field-initializers
 EXTRA_CFLAGS += -Wno-type-limits
-# Consti10 openhd begin - relax some more warnings such that one can build with debug enabled
-EXTRA_CFLAGS += -Wno-implicit-fallthrough
-# Consti10 openhd end
 
 GCC_VER_49 := $(shell echo `$(CC) -dumpversion | cut -f1-2 -d.` \>= 4.9 | bc )
 ifeq ($(GCC_VER_49),1)
@@ -50,8 +50,8 @@ EXTRA_LDFLAGS += --strip-debug
 
 ########################## WIFI IC ############################
 CONFIG_RTL8812A = y
-CONFIG_RTL8821A = y
-CONFIG_RTL8814A = y
+CONFIG_RTL8821A = n
+CONFIG_RTL8814A = n
 ######################### Interface ###########################
 CONFIG_USB_HCI = y
 ########################## Features ###########################
@@ -97,12 +97,10 @@ CONFIG_LED_CONTROL = y
 CONFIG_LED_ENABLE = y
 CONFIG_USB2_EXTERNAL_POWER = y
 ########################## Debug ###########################
-# Consti10: We always compile with debug enabled, but default to a low level to not
-# spam the console - the debug level can be set via the kernel params
-CONFIG_RTW_DEBUG = y
+CONFIG_RTW_DEBUG = n
 # default log level is _DRV_INFO_ = 4,
 # please refer to "How_to_set_driver_debug_log_level.doc" to set the available level.
-CONFIG_RTW_LOG_LEVEL = 7 #Consti10 3==DRV_WARNING
+CONFIG_RTW_LOG_LEVEL = 4
 ######################## Wake On Lan ##########################
 CONFIG_WOWLAN = n
 CONFIG_WAKEUP_TYPE = 0x7 #bit2: deauth, bit1: unicast, bit0: magic pkt.
@@ -117,7 +115,7 @@ CONFIG_RTW_SDIO_PM_KEEP_POWER = y
 ###################### MP HW TX MODE FOR VHT #######################
 CONFIG_MP_VHT_HW_TX_MODE = n
 ###################### Platform Related #######################
-CONFIG_PLATFORM_I386_PC = y
+CONFIG_PLATFORM_I386_PC = n
 CONFIG_PLATFORM_ARM_RPI = n
 CONFIG_PLATFORM_ARM64_RPI = n
 CONFIG_PLATFORM_ANDROID_X86 = n
@@ -219,9 +217,9 @@ else
 EXTRA_CFLAGS += -DDBG=0
 endif
 
-ifeq ($(CONFIG_RTL8812A)_$(CONFIG_RTL8821A)_$(CONFIG_RTL8814A), y_y_y)
+ifeq ($(CONFIG_RTL8812A)_$(CONFIG_RTL8821A), y_n)
 
-EXTRA_CFLAGS += -DDRV_NAME=\"rtl88xxau_ohd\"
+EXTRA_CFLAGS += -DDRV_NAME=\"rtl88xxau\"
 ifeq ($(CONFIG_USB_HCI), y)
 USER_MODULE_NAME = 88XXau
 endif
@@ -304,11 +302,7 @@ _BTC_FILES += hal/btc/halbtc8192e1ant.o \
 				hal/btc/halbtc8821c2ant.o
 endif
 
-ifeq ($(CONFIG_PLATFORM_ARM64_RPI), y)
-include $(TopDIR)/drivers/net/wireless/rtl8812au/hal/phydm/phydm.mk
-else
-include $(TopDIR)/hal/phydm/phydm.mk
-endif
+include $(src)/hal/phydm/phydm.mk
 
 ########### HAL_RTL8812A_RTL8821A #################################
 ifneq ($(CONFIG_RTL8812A)_$(CONFIG_RTL8821A), n_n)
@@ -719,9 +713,6 @@ endif
 ifeq ($(CONFIG_PLATFORM_ARM_RPI), y)
 EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN
 EXTRA_CFLAGS += -DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT
-#EXTRA_CFLAGS += -DCONFIG_XMIT_THREAD_MODE # Currently appears not to work, but could be helpful
-EXTRA_CFLAGS += -DCONFIG_USE_USB_BUFFER_ALLOC_TX
-EXTRA_CFLAGS += -DCONFIG_REDUCE_USB_TX_INT
 ARCH ?= arm
 CROSS_COMPILE ?=
 KVER ?= $(shell uname -r)
@@ -1543,7 +1534,7 @@ endif
 
 USER_MODULE_NAME ?=
 ifneq ($(USER_MODULE_NAME),)
-MODULE_NAME := $(USER_MODULE_NAME)_ohd
+MODULE_NAME := $(USER_MODULE_NAME)
 endif
 
 ifneq ($(KERNELRELEASE),)
@@ -1610,8 +1601,6 @@ export CONFIG_RTL8812AU = m
 all: modules
 
 modules:
-	    @echo '#define DRIVERVERSION "v5.2.20.2_ohd_$(shell git rev-parse --short HEAD)"' > $(VERSION_HEADER)
-	 
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KSRC) M=$(shell pwd) O="$(KBUILD_OUTPUT)" modules
 
 strip:
@@ -1667,7 +1656,6 @@ config_r:
 .PHONY: modules clean
 
 clean:
-	@echo '#define DRIVERVERSION "v5.2.20.2_ohd_THIS_IS_DIRTY"' > $(VERSION_HEADER)
 	#$(MAKE) -C $(KSRC) M=$(shell pwd) clean
 	cd hal ; rm -fr */*/*/*.mod.c */*/*/*.mod */*/*/*.o */*/*/*.o.* */*/*/.*.cmd */*/*/*.ko
 	cd hal ; rm -fr */*/*.mod.c */*/*.mod */*/*.o */*/*.o.* */*/.*.cmd */*/*.ko
@@ -1682,5 +1670,4 @@ clean:
 	rm -fr *.mod.c *.mod *.o *.o.* .*.cmd *.ko *~
 	rm -fr .tmp_versions
 	rm -fr .cache.mk
-
 endif

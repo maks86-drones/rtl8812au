@@ -218,8 +218,7 @@ u8 rtw_get_scch_by_cch_offset(u8 cch, u8 bw, u8 offset)
 	}
 
 	/* 2.4G, 40MHz */
-	//if (cch >= 3 && cch <= 11 && bw == CHANNEL_WIDTH_40) {
-    if (cch >= 3 && cch <= 14 && bw == CHANNEL_WIDTH_40) { // OpenHD fix:
+	if (cch >= 3 && cch <= 11 && bw == CHANNEL_WIDTH_40) {
 		t_cch = (offset == HAL_PRIME_CHNL_OFFSET_UPPER) ? cch + 2 : cch - 2;
 		goto exit;
 	}
@@ -1808,7 +1807,7 @@ inline u8 rtw_is_5g_band4(u8 ch)
 
 inline u8 rtw_is_dfs_range(u32 hi, u32 lo)
 {
-	return rtw_is_range_overlap(hi, lo, 5720 + 10, 5260 - 10);
+	return 0; //rtw_is_range_overlap(hi, lo, 5720 + 10, 5260 - 10);
 }
 
 u8 rtw_is_dfs_ch(u8 ch)

@@ -75,9 +75,8 @@
 #endif
 
 /* xmit extension buff defination */
-#define MAX_XMIT_EXTBUF_SZ	(1536)
+#define MAX_XMIT_EXTBUF_SZ	(4096)
 
-// OpenHD: This is the (monitor mode) frame(s) tx queue size in the driver
 #ifdef CONFIG_SINGLE_XMIT_BUF
 	#define NR_XMIT_EXTBUFF	(1)
 #else

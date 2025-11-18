@@ -3253,9 +3253,9 @@ static int rtw_wx_get_nick(struct net_device *dev,
 	/* struct security_priv *psecuritypriv = &padapter->securitypriv; */
 
 	if (extra) {
-		wrqu->data.length = 16;
+		wrqu->data.length = 14;
 		wrqu->data.flags = 1;
-		_rtw_memcpy(extra, "rtl8812au_openhd", 16);
+		_rtw_memcpy(extra, "<WIFI@REALTEK>", 14);
 	}
 
 	/* rtw_signal_process(pid, SIGUSR1); */ /* for test */
@@ -9922,11 +9922,8 @@ static int rtw_mp_efuse_set(struct net_device *dev,
 		rtw_hal_read_chip_info(padapter);
 		/* set mac addr*/
 		rtw_macaddr_cfg(adapter_mac_addr(padapter), get_hal_mac_addr(padapter));
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(5, 17, 0))
-		eth_hw_addr_set(padapter->pnetdev, get_hal_mac_addr(padapter));
-#else
-		_rtw_memcpy(padapter->pnetdev->dev_addr, get_hal_mac_addr(padapter), ETH_ALEN); /* set mac addr to net_device */
-#endif
+		dev_addr_set(padapter->pnetdev, get_hal_mac_addr(padapter)); /* set mac addr to net_device */
+
 #ifdef CONFIG_P2P
 		rtw_init_wifidirect_addrs(padapter, adapter_mac_addr(padapter), adapter_mac_addr(padapter));
 #endif

@@ -29,8 +29,6 @@
 #include <wlan_bssdef.h>
 #include <wifi.h>
 #include <ieee80211.h>
-
-
 #ifdef CONFIG_ARP_KEEP_ALIVE
 	#include <net/neighbour.h>
 	#include <net/arp.h>
@@ -335,9 +333,6 @@ struct registry_priv {
 	u8	RegEnableTxPowerLimit;
 #endif
 	u8	RegEnableTxPowerByRate;
-	u8	RegTxPowerIndexOverride;
-    int32_t openhd_override_channel;
-    int32_t openhd_override_channel_width;
 
 	u8 target_tx_pwr_valid;
 	s8 target_tx_pwr_2g[RF_PATH_MAX][RATE_SECTION_NUM];
@@ -445,6 +440,20 @@ struct registry_priv {
   u8 led_enable;
 #endif
 };
+
+extern int rtw_tx_pwr_idx_override;
+static u8 get_overridden_tx_power_index(u8 index) {
+	int override_index = *(volatile int*)&rtw_tx_pwr_idx_override;
+	if (override_index < 0)
+		override_index = 0;
+	if (override_index > MAX_POWER_INDEX)
+		override_index = MAX_POWER_INDEX;
+	*(volatile int*)&rtw_tx_pwr_idx_override = override_index;
+
+	if (override_index)
+		return (u8)override_index;
+	return index;
+}
 
 /* For registry parameters */
 #define RGTRY_OFT(field) ((ULONG)FIELD_OFFSET(struct registry_priv, field))
@@ -1674,11 +1683,5 @@ int rtw_suspend_free_assoc_resource(_adapter *padapter);
 	#include <pci_ops.h>
 	#include <pci_hal.h>
 #endif
-
-// OpenHD crda workaround
-int get_openhd_override_channel(void);
-int get_openhd_override_channel_width(void);
-int get_openhd_override_tx_power_index(void);
-
 
 #endif /* __DRV_TYPES_H__ */
